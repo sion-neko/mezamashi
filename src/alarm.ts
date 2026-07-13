@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 
 // iOSのローカル通知は同時予約64件が上限のため、60件に抑える
@@ -7,6 +8,8 @@ export const BURST_INTERVAL_MS = 2000;
 export const BURST_DURATION_MS = BURST_COUNT * BURST_INTERVAL_MS;
 
 const STORAGE_KEY = 'alarm';
+const ALARM_SOUND = 'alarm-alert.wav';
+const ANDROID_CHANNEL_ID = 'alarm';
 
 export type Alarm = {
   hour: number;
@@ -53,16 +56,28 @@ export function getPhase(alarm: Alarm | null, now = new Date()): AlarmPhase {
   return 'expired';
 }
 
+/** Android 8+ ではチャンネル単位でしか通知音を指定できないため、事前に用意しておく */
+async function ensureAndroidChannel(): Promise<void> {
+  if (Platform.OS !== 'android') return;
+  await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
+    name: '目覚ましアラーム',
+    importance: Notifications.AndroidImportance.MAX,
+    sound: ALARM_SOUND,
+  });
+}
+
 /** 既存予約をすべて消してから、fire時刻を起点に2秒間隔のバーストを予約する */
 export async function scheduleBurst(fire: Date, hour: number, minute: number): Promise<void> {
   await Notifications.cancelAllScheduledNotificationsAsync();
+  await ensureAndroidChannel();
   const label = formatTime(hour, minute);
   for (let i = 0; i < BURST_COUNT; i++) {
     await Notifications.scheduleNotificationAsync({
       content: {
         title: '⏰ 起きる時間です',
         body: `${label} のアラーム — アプリを開いて止めてください`,
-        sound: true,
+        sound: ALARM_SOUND,
+        ...(Platform.OS === 'android' ? { channelId: ANDROID_CHANNEL_ID } : {}),
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,
