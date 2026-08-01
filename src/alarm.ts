@@ -8,7 +8,7 @@ export const BURST_INTERVAL_MS = 2000;
 export const BURST_DURATION_MS = BURST_COUNT * BURST_INTERVAL_MS;
 
 const STORAGE_KEY = 'alarm';
-const ALARM_SOUND = 'alarm-alert.wav';
+const ALARM_SOUND = 'mixkit-marimba-ringtone-1359.wav';
 const ANDROID_CHANNEL_ID = 'alarm';
 
 export type Alarm = {
