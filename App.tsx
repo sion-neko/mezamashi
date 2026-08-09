@@ -244,7 +244,8 @@ export default function App() {
       <View style={styles.screen}>
         <Backdrop />
         <StatusBar style="dark" />
-        <View style={styles.card}>
+        {/* 読むだけの情報なので面で囲わず、クリームの上に直接置く */}
+        <View style={styles.armedBlock}>
           <View style={styles.chip}>
             <Text style={styles.chipText}>
               {alarm.repeatDaily ? '毎日' : '1回だけ'}
@@ -445,6 +446,10 @@ const styles = StyleSheet.create({
   },
 
   // --- セット済み画面 ---
+  armedBlock: {
+    alignItems: 'center',
+    gap: 10,
+  },
   chip: {
     backgroundColor: colors.sagePale,
     borderRadius: radius.pill,
@@ -459,7 +464,8 @@ const styles = StyleSheet.create({
   },
   armedTime: {
     color: colors.ink,
-    fontSize: 76,
+    // 面から出したぶん、一目で読める大きさまで上げる
+    fontSize: 92,
     fontWeight: '200',
     letterSpacing: 2,
     fontVariant: ['tabular-nums'],
@@ -475,6 +481,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 52,
     borderRadius: radius.pill,
+    marginTop: 8,
   },
   disarmButtonText: {
     color: colors.clay,
