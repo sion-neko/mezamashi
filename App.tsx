@@ -276,6 +276,9 @@ export default function App() {
       </View>
       <View style={styles.card}>
         <DateTimePicker
+          // ネイティブのピッカーは幅の既定値を持たず固有サイズに任せる作りなので、
+          // カードの内側に置くとはみ出す。カード幅いっぱいに広げて収める
+          style={styles.picker}
           value={pickerValue}
           mode="time"
           display="spinner"
@@ -398,6 +401,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     gap: 8,
     ...softShadow,
+  },
+  picker: {
+    // 高さは指定しない（プラットフォームごとの固有の高さをそのまま使う）
+    alignSelf: 'stretch',
+    // カードの左右パディングぶんだけはみ出させ、狭い端末でもホイールを潰さない
+    // （375pt幅で 285pt → 309pt、390pt幅で 300pt → 324pt）
+    marginHorizontal: -12,
   },
   divider: {
     alignSelf: 'stretch',
