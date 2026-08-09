@@ -246,11 +246,9 @@ export default function App() {
         <StatusBar style="dark" />
         {/* 読むだけの情報なので面で囲わず、クリームの上に直接置く */}
         <View style={styles.armedBlock}>
-          <View style={styles.chip}>
-            <Text style={styles.chipText}>
-              {alarm.repeatDaily ? '毎日' : '1回だけ'}
-            </Text>
-          </View>
+          <Text style={styles.armedLabel}>
+            {alarm.repeatDaily ? '毎日' : '1回だけ'}
+          </Text>
           <Text style={styles.armedTime}>{formatTime(alarm.hour, alarm.minute)}</Text>
           <Text style={styles.countdown}>
             あと {remainH > 0 ? `${remainH}時間` : ''}
@@ -450,17 +448,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  chip: {
-    backgroundColor: colors.sagePale,
-    borderRadius: radius.pill,
-    paddingVertical: 6,
-    paddingHorizontal: 18,
-  },
-  chipText: {
-    color: colors.sageDeep,
-    fontSize: 14,
+  // 面を持たせるとカードを外した画面で浮くため、文字だけで示す。
+  // 字間を広めに取って、静かなまま存在感を出す
+  armedLabel: {
+    color: colors.sageInk,
+    fontSize: 13,
     fontWeight: '600',
-    letterSpacing: 1,
+    letterSpacing: 5,
+    // letterSpacing で右側に余白がつくぶんを戻して光学的に中央へ寄せる
+    marginLeft: 5,
   },
   armedTime: {
     color: colors.ink,

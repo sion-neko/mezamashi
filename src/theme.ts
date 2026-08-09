@@ -24,6 +24,8 @@ export const colors = {
   sageDeep: '#6E8B6A',
   /** 背景装飾に使う淡いセージ */
   sagePale: '#E7EFE0',
+  /** クリーム地に小さな文字で載せるセージ（コントラスト比 4.7:1） */
+  sageInk: '#5A7456',
 
   /** 鳴動画面の朝日オレンジ */
   sunrise: '#F5A85F',
