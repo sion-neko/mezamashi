@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import {
   Alert,
+  Animated,
   AppState,
+  Easing,
   Pressable,
   StyleSheet,
   Switch,
@@ -24,6 +26,7 @@ import {
   scheduleBurst,
   stopRinging,
 } from './src/alarm';
+import { colors, radius, softShadow } from './src/theme';
 
 // アプリを開いたまま鳴った場合もバナー＋音を出す
 Notifications.setNotificationHandler({
@@ -39,6 +42,55 @@ function defaultPickerValue(): Date {
   const d = new Date();
   d.setHours(7, 0, 0, 0);
   return d;
+}
+
+/** 背景の装飾：右上に朝の光、下にセージ色の毛布のような膨らみ。操作は透過させる */
+function Backdrop() {
+  return (
+    <View style={styles.backdrop} pointerEvents="none">
+      <View style={styles.glowOuter} />
+      <View style={styles.glowInner} />
+      <View style={styles.hillBack} />
+      <View style={styles.hillFront} />
+    </View>
+  );
+}
+
+/** 鳴動画面の朝日。ゆっくり呼吸するように拡縮させる */
+function SunMark() {
+  const pulse = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 1600,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0,
+          duration: 1600,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] });
+  const haloScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.22] });
+
+  return (
+    <View style={styles.sunWrap} pointerEvents="none">
+      <Animated.View style={[styles.sunHalo, { transform: [{ scale: haloScale }] }]} />
+      <Animated.View style={[styles.sunRing, { transform: [{ scale }] }]} />
+      <View style={styles.sunCore} />
+    </View>
+  );
 }
 
 export default function App() {
@@ -159,18 +211,25 @@ export default function App() {
   };
 
   if (!loaded) {
-    return <View style={styles.container} />;
+    return <View style={styles.screen} />;
   }
 
   if (phase === 'ringing') {
     return (
-      <View style={[styles.container, styles.ringing]}>
-        <StatusBar style="light" />
-        <Text style={styles.ringingEmoji}>⏰</Text>
+      <View style={[styles.screen, styles.ringingScreen]}>
+        <StatusBar style="dark" />
+        <View style={styles.backdrop} pointerEvents="none">
+          <View style={styles.sunriseHill} />
+        </View>
+        <SunMark />
+        <Text style={styles.ringingLabel}>起きる時間です</Text>
         <Text style={styles.ringingTime}>
           {alarm ? formatTime(alarm.hour, alarm.minute) : ''}
         </Text>
-        <Pressable style={styles.stopButton} onPress={handleStop}>
+        <Pressable
+          style={({ pressed }) => [styles.stopButton, pressed && styles.pressed]}
+          onPress={handleStop}
+        >
           <Text style={styles.stopButtonText}>止める</Text>
         </Pressable>
       </View>
@@ -182,17 +241,24 @@ export default function App() {
     const remainH = Math.floor(remainMs / 3600000);
     const remainM = Math.ceil((remainMs % 3600000) / 60000);
     return (
-      <View style={styles.container}>
-        <StatusBar style="light" />
-        <Text style={styles.armedLabel}>
-          {alarm.repeatDaily ? '毎日' : '1回だけ'}
-        </Text>
-        <Text style={styles.armedTime}>{formatTime(alarm.hour, alarm.minute)}</Text>
-        <Text style={styles.countdown}>
-          あと {remainH > 0 ? `${remainH}時間` : ''}
-          {remainM}分
-        </Text>
-        <Pressable style={styles.disarmButton} onPress={handleDisarm}>
+      <View style={styles.screen}>
+        <Backdrop />
+        <StatusBar style="dark" />
+        {/* 読むだけの情報なので面で囲わず、クリームの上に直接置く */}
+        <View style={styles.armedBlock}>
+          <Text style={styles.armedLabel}>
+            {alarm.repeatDaily ? '毎日' : '1回だけ'}
+          </Text>
+          <Text style={styles.armedTime}>{formatTime(alarm.hour, alarm.minute)}</Text>
+          <Text style={styles.countdown}>
+            あと {remainH > 0 ? `${remainH}時間` : ''}
+            {remainM}分
+          </Text>
+        </View>
+        <Pressable
+          style={({ pressed }) => [styles.disarmButton, pressed && styles.pressed]}
+          onPress={handleDisarm}
+        >
           <Text style={styles.disarmButtonText}>解除</Text>
         </Pressable>
       </View>
@@ -200,23 +266,44 @@ export default function App() {
   }
 
   return (
-    <View style={styles.container}>
-      <StatusBar style="light" />
-      <Text style={styles.title}>目覚まし</Text>
-      <DateTimePicker
-        value={pickerValue}
-        mode="time"
-        display="spinner"
-        themeVariant="dark"
-        onChange={(_, date) => {
-          if (date) setPickerValue(date);
-        }}
-      />
-      <View style={styles.repeatRow}>
-        <Text style={styles.repeatLabel}>毎日繰り返す</Text>
-        <Switch value={repeatDaily} onValueChange={setRepeatDaily} />
+    <View style={styles.screen}>
+      <Backdrop />
+      <StatusBar style="dark" />
+      <View style={styles.header}>
+        <Text style={styles.title}>目覚まし</Text>
+        <Text style={styles.subtitle}>何時に起こしましょうか</Text>
       </View>
-      <Pressable style={styles.setButton} onPress={handleSet}>
+      <View style={styles.card}>
+        <DateTimePicker
+          // ネイティブのピッカーは幅の既定値を持たず固有サイズに任せる作りなので、
+          // カードの内側に置くとはみ出す。カード幅いっぱいに広げて収める
+          style={styles.picker}
+          value={pickerValue}
+          mode="time"
+          display="spinner"
+          themeVariant="light"
+          textColor={colors.ink}
+          accentColor={colors.sageDeep}
+          onChange={(_, date) => {
+            if (date) setPickerValue(date);
+          }}
+        />
+        <View style={styles.divider} />
+        <View style={styles.repeatRow}>
+          <Text style={styles.repeatLabel}>毎日繰り返す</Text>
+          <Switch
+            value={repeatDaily}
+            onValueChange={setRepeatDaily}
+            trackColor={{ false: colors.switchOff, true: colors.sage }}
+            thumbColor={colors.card}
+            ios_backgroundColor={colors.switchOff}
+          />
+        </View>
+      </View>
+      <Pressable
+        style={({ pressed }) => [styles.setButton, pressed && styles.pressed]}
+        onPress={handleSet}
+      >
         <Text style={styles.setButtonText}>セット</Text>
       </Pressable>
     </View>
@@ -224,88 +311,249 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
-    backgroundColor: '#111',
+    backgroundColor: colors.cream,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 24,
+    gap: 28,
     padding: 24,
+    // 背景装飾を画面外にはみ出させずに切り取る
+    overflow: 'hidden',
+  },
+  pressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
+  },
+
+  // --- 背景装飾 ---
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  glowOuter: {
+    position: 'absolute',
+    top: -160,
+    right: -120,
+    width: 380,
+    height: 380,
+    borderRadius: 190,
+    backgroundColor: colors.creamDeep,
+    opacity: 0.55,
+  },
+  glowInner: {
+    position: 'absolute',
+    top: -110,
+    right: -40,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: colors.creamDeep,
+    opacity: 0.6,
+  },
+  hillBack: {
+    position: 'absolute',
+    left: -80,
+    right: -80,
+    bottom: -140,
+    height: 300,
+    borderRadius: 220,
+    backgroundColor: colors.sagePale,
+    opacity: 0.7,
+  },
+  hillFront: {
+    position: 'absolute',
+    left: -60,
+    right: -60,
+    bottom: -190,
+    height: 300,
+    borderRadius: 200,
+    backgroundColor: colors.sagePale,
+  },
+
+  // --- 見出し ---
+  header: {
+    alignItems: 'center',
+    gap: 6,
   },
   title: {
-    color: '#fff',
-    fontSize: 28,
+    color: colors.ink,
+    fontSize: 30,
     fontWeight: '600',
+    letterSpacing: 2,
+  },
+  subtitle: {
+    color: colors.inkSoft,
+    fontSize: 14,
+    letterSpacing: 1,
+  },
+
+  // --- カード ---
+  card: {
+    width: '100%',
+    maxWidth: 360,
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+    gap: 8,
+    ...softShadow,
+  },
+  picker: {
+    // 高さは指定しない（プラットフォームごとの固有の高さをそのまま使う）
+    alignSelf: 'stretch',
+    // カードの左右パディングぶんだけはみ出させ、狭い端末でもホイールを潰さない
+    // （375pt幅で 285pt → 309pt、390pt幅で 300pt → 324pt）
+    marginHorizontal: -12,
+  },
+  divider: {
+    alignSelf: 'stretch',
+    height: 1,
+    backgroundColor: colors.cardBorder,
+    marginTop: 4,
   },
   repeatRow: {
+    alignSelf: 'stretch',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'space-between',
+    paddingTop: 6,
   },
   repeatLabel: {
-    color: '#ccc',
+    color: colors.ink,
     fontSize: 16,
   },
+
+  // --- セットボタン ---
   setButton: {
-    backgroundColor: '#2e7d32',
-    paddingVertical: 16,
-    paddingHorizontal: 64,
-    borderRadius: 32,
+    backgroundColor: colors.sageDeep,
+    paddingVertical: 18,
+    paddingHorizontal: 72,
+    borderRadius: radius.pill,
+    ...softShadow,
+    shadowColor: colors.sageDeep,
+    shadowOpacity: 0.3,
   },
   setButtonText: {
-    color: '#fff',
+    color: colors.card,
     fontSize: 20,
     fontWeight: '700',
+    letterSpacing: 2,
   },
+
+  // --- セット済み画面 ---
+  armedBlock: {
+    alignItems: 'center',
+    gap: 10,
+  },
+  // 面を持たせるとカードを外した画面で浮くため、文字だけで示す。
+  // 字間を広めに取って、静かなまま存在感を出す
   armedLabel: {
-    color: '#888',
-    fontSize: 18,
+    color: colors.sageInk,
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 5,
+    // letterSpacing で右側に余白がつくぶんを戻して光学的に中央へ寄せる
+    marginLeft: 5,
   },
   armedTime: {
-    color: '#fff',
-    fontSize: 72,
+    color: colors.ink,
+    // 面から出したぶん、一目で読める大きさまで上げる
+    fontSize: 92,
     fontWeight: '200',
+    letterSpacing: 2,
     fontVariant: ['tabular-nums'],
   },
   countdown: {
-    color: '#aaa',
-    fontSize: 18,
+    color: colors.inkSoft,
+    fontSize: 16,
+    letterSpacing: 1,
   },
   disarmButton: {
-    borderColor: '#c62828',
-    borderWidth: 2,
+    borderColor: colors.clay,
+    borderWidth: 1.5,
     paddingVertical: 14,
-    paddingHorizontal: 56,
-    borderRadius: 32,
-    marginTop: 16,
+    paddingHorizontal: 52,
+    borderRadius: radius.pill,
+    marginTop: 8,
   },
   disarmButtonText: {
-    color: '#ef5350',
-    fontSize: 18,
+    color: colors.clay,
+    fontSize: 17,
     fontWeight: '600',
+    letterSpacing: 2,
   },
-  ringing: {
-    backgroundColor: '#b71c1c',
+
+  // --- 鳴動画面 ---
+  ringingScreen: {
+    backgroundColor: colors.sunrise,
   },
-  ringingEmoji: {
-    fontSize: 96,
+  sunriseHill: {
+    position: 'absolute',
+    left: -60,
+    right: -60,
+    bottom: -190,
+    height: 300,
+    borderRadius: 200,
+    backgroundColor: colors.sunriseCore,
+    opacity: 0.22,
+  },
+  sunWrap: {
+    width: 200,
+    height: 200,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sunHalo: {
+    position: 'absolute',
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: colors.sunriseCore,
+    opacity: 0.25,
+  },
+  sunRing: {
+    position: 'absolute',
+    width: 148,
+    height: 148,
+    borderRadius: 74,
+    backgroundColor: colors.sunriseCore,
+    opacity: 0.45,
+  },
+  sunCore: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: colors.sunriseCore,
+  },
+  ringingLabel: {
+    color: colors.sunriseInk,
+    fontSize: 18,
+    letterSpacing: 3,
+    opacity: 0.8,
   },
   ringingTime: {
-    color: '#fff',
-    fontSize: 56,
+    color: colors.sunriseInk,
+    fontSize: 64,
     fontWeight: '300',
+    letterSpacing: 2,
     fontVariant: ['tabular-nums'],
   },
   stopButton: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     paddingVertical: 20,
-    paddingHorizontal: 80,
-    borderRadius: 40,
-    marginTop: 24,
+    paddingHorizontal: 72,
+    borderRadius: radius.pill,
+    ...softShadow,
+    shadowColor: '#8A4A18',
+    shadowOpacity: 0.25,
   },
   stopButtonText: {
-    color: '#b71c1c',
-    fontSize: 24,
+    color: colors.sunriseDeep,
+    fontSize: 22,
     fontWeight: '800',
+    letterSpacing: 3,
   },
 });
