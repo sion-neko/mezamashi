@@ -4,8 +4,8 @@ import * as Notifications from 'expo-notifications';
 
 // iOSのローカル通知は同時予約64件が上限のため、60件に抑える
 export const BURST_COUNT = 60;
-// 音源長(3.99秒)より少しだけ長くして、前の通知音と重ならないようにする
-export const BURST_INTERVAL_MS = 4000;
+// 音源長(3.99秒)より短いため、通知音は2重に重なる。畳みかけて鳴らすための意図的な設定
+export const BURST_INTERVAL_MS = 2000;
 export const BURST_DURATION_MS = BURST_COUNT * BURST_INTERVAL_MS;
 
 const STORAGE_KEY = 'alarm';
