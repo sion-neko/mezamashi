@@ -31,7 +31,7 @@
         "expo-notifications",
         {
           "sounds": [
-            "./assets/sounds/mixkit-marimba-ringtone-1359.wav"
+            "./assets/sounds/mixkit-uplifting-flute-notification-2317.wav"
           ]
         }
       ]
