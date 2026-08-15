@@ -9,6 +9,7 @@ export const BURST_INTERVAL_MS = 2000;
 export const BURST_DURATION_MS = BURST_COUNT * BURST_INTERVAL_MS;
 
 const STORAGE_KEY = 'alarm';
+const SILENT_NOTICE_KEY = 'silentNoticeHidden';
 const ALARM_SOUND = 'mixkit-uplifting-flute-notification-2317.wav';
 const ANDROID_CHANNEL_ID = 'alarm';
 
@@ -33,6 +34,15 @@ export async function saveAlarm(alarm: Alarm): Promise<void> {
 
 export async function clearAlarm(): Promise<void> {
   await AsyncStorage.removeItem(STORAGE_KEY);
+}
+
+/** マナーモードの注意書きを「今後表示しない」にしてあるか */
+export async function isSilentNoticeHidden(): Promise<boolean> {
+  return (await AsyncStorage.getItem(SILENT_NOTICE_KEY)) === '1';
+}
+
+export async function hideSilentNotice(): Promise<void> {
+  await AsyncStorage.setItem(SILENT_NOTICE_KEY, '1');
 }
 
 /** 現在時刻から見て次に hour:minute が来る日時を返す */
@@ -92,6 +102,17 @@ export async function scheduleBurst(fire: Date, hour: number, minute: number): P
 export async function stopRinging(): Promise<void> {
   await Notifications.cancelAllScheduledNotificationsAsync();
   await Notifications.dismissAllNotificationsAsync();
+}
+
+export type PermissionStatus = {
+  granted: boolean;
+  /** OSの許可ダイアログをまだ出せるか。一度拒否されると二度と出せない */
+  canAskAgain: boolean;
+};
+
+export async function getPermissionStatus(): Promise<PermissionStatus> {
+  const { granted, canAskAgain } = await Notifications.getPermissionsAsync();
+  return { granted, canAskAgain };
 }
 
 export async function requestPermission(): Promise<boolean> {

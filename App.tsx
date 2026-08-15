@@ -5,6 +5,7 @@ import {
   Animated,
   AppState,
   Easing,
+  Linking,
   Pressable,
   StyleSheet,
   Switch,
@@ -19,7 +20,10 @@ import {
   clearAlarm,
   computeNextFire,
   formatTime,
+  getPermissionStatus,
   getPhase,
+  hideSilentNotice,
+  isSilentNoticeHidden,
   loadAlarm,
   requestPermission,
   saveAlarm,
@@ -93,6 +97,19 @@ function SunMark() {
   );
 }
 
+/** 通知が許可されていないときだけ出す警告。押すと許可を促す */
+function NotifyWarning({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.warning, pressed && styles.pressed]}
+      onPress={onPress}
+    >
+      <Text style={styles.warningTitle}>通知がオフのため、アラームは鳴りません</Text>
+      <Text style={styles.warningBody}>タップして通知を許可する</Text>
+    </Pressable>
+  );
+}
+
 export default function App() {
   const [alarm, setAlarm] = useState<Alarm | null>(null);
   const [phase, setPhase] = useState<AlarmPhase>('idle');
@@ -100,8 +117,40 @@ export default function App() {
   const [repeatDaily, setRepeatDaily] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [now, setNow] = useState(new Date());
+  // 判定前は警告を出さない（起動直後に一瞬だけ出るのを避ける）
+  const [notifyGranted, setNotifyGranted] = useState(true);
   const alarmRef = useRef<Alarm | null>(null);
   alarmRef.current = alarm;
+
+  const refreshPermission = useCallback(async () => {
+    const status = await getPermissionStatus();
+    setNotifyGranted(status.granted);
+    return status;
+  }, []);
+
+  /**
+   * 通知をオンにする。まだ聞いていなければOSダイアログを出し、
+   * 一度拒否されていてダイアログを出せない場合は設定アプリへ送る
+   * （アプリ側から通知をオンにする手段はこれしかない）。
+   */
+  const ensurePermission = useCallback(async (): Promise<boolean> => {
+    const status = await refreshPermission();
+    if (status.granted) return true;
+    if (status.canAskAgain) {
+      const ok = await requestPermission();
+      setNotifyGranted(ok);
+      if (ok) return true;
+    }
+    Alert.alert(
+      '通知がオフです',
+      'このアプリは端末の通知でアラームを鳴らします。オフのままだと、時刻になっても鳴りません。設定アプリで通知を許可してください。',
+      [
+        { text: 'あとで', style: 'cancel' },
+        { text: '設定を開く', onPress: () => void Linking.openSettings() },
+      ]
+    );
+    return false;
+  }, [refreshPermission]);
 
   // 状態遷移の一元処理。expired（鳴り終わって放置）はここで畳む
   const reconcile = useCallback(async (a: Alarm | null) => {
@@ -137,19 +186,22 @@ export default function App() {
         setRepeatDaily(saved.repeatDaily);
       }
       await reconcile(saved);
+      await refreshPermission();
       setLoaded(true);
     })();
-  }, [reconcile]);
+  }, [reconcile, refreshPermission]);
 
-  // フォアグラウンド復帰時に状態を再評価
+  // フォアグラウンド復帰時に状態を再評価。
+  // 設定アプリで通知を切り替えて戻ってくる経路があるので許可状態も見直す
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         void reconcile(alarmRef.current);
+        void refreshPermission();
       }
     });
     return () => sub.remove();
-  }, [reconcile]);
+  }, [reconcile, refreshPermission]);
 
   // 毎秒tick：armed→ringingへの遷移とカウントダウン表示のため
   useEffect(() => {
@@ -163,14 +215,7 @@ export default function App() {
   }, []);
 
   const handleSet = async () => {
-    const ok = await requestPermission();
-    if (!ok) {
-      Alert.alert(
-        '通知が許可されていません',
-        '設定アプリからこのアプリの通知を許可してください。通知なしではアラームが鳴りません。'
-      );
-      return;
-    }
+    if (!(await ensurePermission())) return;
     const hour = pickerValue.getHours();
     const minute = pickerValue.getMinutes();
     const fire = computeNextFire(hour, minute);
@@ -184,6 +229,16 @@ export default function App() {
     await saveAlarm(next);
     setAlarm(next);
     setPhase('armed');
+    if (!(await isSilentNoticeHidden())) {
+      Alert.alert(
+        'マナーモードにご注意',
+        '端末がマナーモード（消音）だと、アラームの音が鳴らないことがあります。確実に音で起きたい場合は、寝る前にマナーモードを解除してください。',
+        [
+          { text: '今後表示しない', style: 'destructive', onPress: () => void hideSilentNotice() },
+          { text: 'OK', style: 'cancel' },
+        ]
+      );
+    }
   };
 
   const handleDisarm = async () => {
@@ -255,6 +310,7 @@ export default function App() {
             {remainM}分
           </Text>
         </View>
+        {!notifyGranted && <NotifyWarning onPress={() => void ensurePermission()} />}
         <Pressable
           style={({ pressed }) => [styles.disarmButton, pressed && styles.pressed]}
           onPress={handleDisarm}
@@ -300,6 +356,7 @@ export default function App() {
           />
         </View>
       </View>
+      {!notifyGranted && <NotifyWarning onPress={() => void ensurePermission()} />}
       <Pressable
         style={({ pressed }) => [styles.setButton, pressed && styles.pressed]}
         onPress={handleSet}
@@ -424,6 +481,32 @@ const styles = StyleSheet.create({
   repeatLabel: {
     color: colors.ink,
     fontSize: 16,
+  },
+
+  // --- 通知オフの警告 ---
+  // 画面の主役はあくまで時刻なので、赤ではなく地の色に馴染むテラコッタで面を張る
+  warning: {
+    width: '100%',
+    maxWidth: 360,
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.clayPale,
+    borderRadius: radius.card,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    // gap の 28 は面と面の間隔としては空きすぎるので詰める
+    marginVertical: -8,
+  },
+  warningTitle: {
+    color: colors.clayInk,
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  warningBody: {
+    color: colors.clayInk,
+    fontSize: 13,
+    opacity: 0.85,
   },
 
   // --- セットボタン ---
