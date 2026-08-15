@@ -26,7 +26,6 @@ CREAM_LO = "#F5EBD8"
 SAGE_HI = "#C9DCC1"
 SAGE_MID = "#A8C09E"
 SAGE_LO = "#8FA98B"
-SAGE_SOFT = "#C2D6B9"
 FACE_HI = "#FFFCF5"
 FACE_LO = "#F6E7CB"
 TICK = "#CBDEC3"
@@ -68,8 +67,6 @@ DEFS = f"""
 
 CX, CY, R = 500.0, 566.0, 246.0  # clock body
 FACE_R = 202.0
-
-LEAF = "M 0 0 C 24 -32 68 -36 94 -10 C 68 24 24 28 0 0 Z"
 
 
 def ring(cx: float, cy: float, r_out: float, r_in: float) -> str:
@@ -176,21 +173,6 @@ SPARKS = "\n".join(
     for t in (73, 47, 21)
 )
 
-SPRIG = f"""
-  <g stroke-linecap="round">
-    <path d="M 746 714 C 806 778 846 850 864 938" fill="none" stroke="{SAGE_MID}" stroke-width="13"/>
-    <g fill="{SAGE_SOFT}">
-      <g transform="translate(756,724) rotate(-58) scale(0.70)"><path d="{LEAF}"/></g>
-      <g transform="translate(764,740) rotate(152) scale(0.64)"><path d="{LEAF}"/></g>
-      <g transform="translate(796,784) rotate(-42) scale(0.80)"><path d="{LEAF}"/></g>
-      <g transform="translate(806,802) rotate(166) scale(0.72)"><path d="{LEAF}"/></g>
-      <g transform="translate(836,860) rotate(-28) scale(0.76)"><path d="{LEAF}"/></g>
-      <g transform="translate(844,878) rotate(178) scale(0.66)"><path d="{LEAF}"/></g>
-      <g transform="translate(860,924) rotate(-74) scale(0.55)"><path d="{LEAF}"/></g>
-    </g>
-  </g>
-"""
-
 # Lift and enlarge the clock slightly so the whole lockup reads centred.
 LOCKUP = "translate(512,478) scale(1.04) translate(-512,-512)"
 
@@ -230,7 +212,7 @@ def fit(inner: str, size: int, coverage: float) -> Image.Image:
 
 def main() -> None:
     bg = '<rect width="1024" height="1024" fill="url(#bg)"/>'
-    full = clock(shadow=True) + SPARKS + SPRIG
+    full = clock(shadow=True) + SPARKS
 
     # iOS / main icon: full bleed, the platform applies its own mask. Saved
     # without an alpha channel — App Store review rejects transparent icons.
@@ -245,7 +227,7 @@ def main() -> None:
     fit(MONO, 432, 0.53).save(f"{OUT}/android-icon-monochrome.png")
 
     # Splash: transparent so it sits on the splash background colour.
-    rasterise(wrap(clock(shadow=False) + SPARKS + SPRIG), 1024).save(
+    rasterise(wrap(clock(shadow=False) + SPARKS), 1024).save(
         f"{OUT}/splash-icon.png"
     )
 
