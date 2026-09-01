@@ -97,15 +97,18 @@ function SunMark() {
   );
 }
 
-/** 通知が許可されていないときだけ出す警告。押すと許可を促す */
+/**
+ * 通知が許可されていないときだけ出す案内。通知は必須ではないので、
+ * 「使えない」ではなく「アプリを開いている間だけ鳴る」ことを伝える。
+ */
 function NotifyWarning({ onPress }: { onPress: () => void }) {
   return (
     <Pressable
       style={({ pressed }) => [styles.warning, pressed && styles.pressed]}
       onPress={onPress}
     >
-      <Text style={styles.warningTitle}>通知がオフのため、アラームは鳴りません</Text>
-      <Text style={styles.warningBody}>タップして通知を許可する</Text>
+      <Text style={styles.warningTitle}>通知オフ：アプリを開いている間だけ鳴ります</Text>
+      <Text style={styles.warningBody}>タップして通知を許可すると、閉じていても鳴ります</Text>
     </Pressable>
   );
 }
@@ -121,35 +124,54 @@ export default function App() {
   const [notifyGranted, setNotifyGranted] = useState(true);
   const alarmRef = useRef<Alarm | null>(null);
   alarmRef.current = alarm;
+  // 直前の許可状態。再予約が必要な「オフ→オン」の変化を見るために持つ
+  const grantedRef = useRef(true);
 
   const refreshPermission = useCallback(async () => {
     const status = await getPermissionStatus();
+    // 通知オフのままセットされたアラームは予約が空なので、
+    // 後から許可が下りたタイミング（設定アプリから戻る等）で取り直す
+    const a = alarmRef.current;
+    if (!grantedRef.current && status.granted && a && getPhase(a) === 'armed') {
+      await scheduleBurst(new Date(a.nextFire), a.hour, a.minute);
+    }
+    grantedRef.current = status.granted;
     setNotifyGranted(status.granted);
     return status;
   }, []);
 
   /**
-   * 通知をオンにする。まだ聞いていなければOSダイアログを出し、
-   * 一度拒否されていてダイアログを出せない場合は設定アプリへ送る
-   * （アプリ側から通知をオンにする手段はこれしかない）。
+   * セット時に一度だけOSの許可を聞く。断られてもアラームのセットは止めない
+   * （通知はあくまで「アプリを閉じていても鳴らす」ための任意の機能）。
    */
-  const ensurePermission = useCallback(async (): Promise<boolean> => {
+  const askPermissionOnce = useCallback(async (): Promise<boolean> => {
     const status = await refreshPermission();
     if (status.granted) return true;
+    if (!status.canAskAgain) return false;
+    await requestPermission();
+    return (await refreshPermission()).granted;
+  }, [refreshPermission]);
+
+  /**
+   * 警告バナーをユーザーが自分でタップしたときだけ呼ぶ。
+   * ダイアログを出せる状態なら出し、一度拒否済みで出せない場合のみ設定アプリへ案内する。
+   */
+  const enableNotification = useCallback(async () => {
+    const status = await refreshPermission();
+    if (status.granted) return;
     if (status.canAskAgain) {
-      const ok = await requestPermission();
-      setNotifyGranted(ok);
-      if (ok) return true;
+      await requestPermission();
+      await refreshPermission();
+      return;
     }
     Alert.alert(
-      '通知がオフです',
-      'このアプリは端末の通知でアラームを鳴らします。オフのままだと、時刻になっても鳴りません。設定アプリで通知を許可してください。',
+      '通知を許可すると',
+      'アプリを閉じていても、時刻になったら音とバナーでお知らせできます。許可しない場合も、アプリを開いている間はアラーム画面でお知らせします。',
       [
-        { text: 'あとで', style: 'cancel' },
+        { text: 'このままでいい', style: 'cancel' },
         { text: '設定を開く', onPress: () => void Linking.openSettings() },
       ]
     );
-    return false;
   }, [refreshPermission]);
 
   // 状態遷移の一元処理。expired（鳴り終わって放置）はここで畳む
@@ -215,7 +237,8 @@ export default function App() {
   }, []);
 
   const handleSet = async () => {
-    if (!(await ensurePermission())) return;
+    // 許可されなくてもセットは通す。通知はアプリを閉じている間の補助でしかない
+    await askPermissionOnce();
     const hour = pickerValue.getHours();
     const minute = pickerValue.getMinutes();
     const fire = computeNextFire(hour, minute);
@@ -310,7 +333,7 @@ export default function App() {
             {remainM}分
           </Text>
         </View>
-        {!notifyGranted && <NotifyWarning onPress={() => void ensurePermission()} />}
+        {!notifyGranted && <NotifyWarning onPress={() => void enableNotification()} />}
         <Pressable
           style={({ pressed }) => [styles.disarmButton, pressed && styles.pressed]}
           onPress={handleDisarm}
@@ -356,7 +379,7 @@ export default function App() {
           />
         </View>
       </View>
-      {!notifyGranted && <NotifyWarning onPress={() => void ensurePermission()} />}
+      {!notifyGranted && <NotifyWarning onPress={() => void enableNotification()} />}
       <Pressable
         style={({ pressed }) => [styles.setButton, pressed && styles.pressed]}
         onPress={handleSet}

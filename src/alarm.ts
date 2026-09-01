@@ -77,9 +77,14 @@ async function ensureAndroidChannel(): Promise<void> {
   });
 }
 
-/** 既存予約をすべて消してから、fire時刻を起点に2秒間隔のバーストを予約する */
+/**
+ * 既存予約をすべて消してから、fire時刻を起点に2秒間隔のバーストを予約する。
+ * 通知が許可されていない場合は何も予約しない（アラーム自体はアプリ内で成立する）。
+ */
 export async function scheduleBurst(fire: Date, hour: number, minute: number): Promise<void> {
   await Notifications.cancelAllScheduledNotificationsAsync();
+  const { granted } = await Notifications.getPermissionsAsync();
+  if (!granted) return;
   await ensureAndroidChannel();
   const label = formatTime(hour, minute);
   for (let i = 0; i < BURST_COUNT; i++) {
