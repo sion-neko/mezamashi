@@ -1,4 +1,4 @@
-# 18_mezamashi
+# 1つしか設定できない目覚まし時計
 
 Expo (React Native) で作った目覚ましアラームアプリ。ローカル通知でアラームを鳴らし、AsyncStorage にセット状態を保存する。
 
