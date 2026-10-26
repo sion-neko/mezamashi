@@ -54,6 +54,14 @@ npm run web       # ブラウザ
 - 通常画面：生成りのクリーム背景に、右上の光とセージグリーンの膨らみを装飾として敷く
 - 鳴動画面：朝日のオレンジ。中央の朝日はゆっくり拡縮して「起きる時間」を伝える
 
+## ストア用スクリーンショット
+
+`docs/store-screenshots/` に App Store 用の4枚（6.9インチ 1290×2796）を置いている。背景は4枚にまたがる朝焼けの横グラデで、左から右へ夜が明けていく。
+
+| 1 | 2 | 3 | 4 |
+|---|---|---|---|
+| ![](docs/store-screenshots/01.png) | ![](docs/store-screenshots/02.png) | ![](docs/store-screenshots/03.png) | ![](docs/store-screenshots/04.png) |
+
 ## ディレクトリ構成
 
 ```
