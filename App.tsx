@@ -8,7 +8,6 @@ import {
   Linking,
   Pressable,
   StyleSheet,
-  Switch,
   Text,
   View,
 } from 'react-native';
@@ -48,14 +47,32 @@ function defaultPickerValue(): Date {
   return d;
 }
 
-/** 背景の装飾：右上に朝の光、下にセージ色の毛布のような膨らみ。操作は透過させる */
-function Backdrop() {
+/** 夜空の装飾：右上に三日月、まわりに小さな星。操作は透過させる */
+const STARS = [
+  { top: 140, left: 48, size: 4 },
+  { top: 92, left: 150, size: 2 },
+  { top: 210, right: 70, size: 2 },
+  { top: 60, right: 170, size: 4 },
+  { top: 250, left: 110, size: 2 },
+];
+
+function NightSky() {
   return (
     <View style={styles.backdrop} pointerEvents="none">
-      <View style={styles.glowOuter} />
-      <View style={styles.glowInner} />
-      <View style={styles.hillBack} />
-      <View style={styles.hillFront} />
+      {/* 月の円に夜空色の円を少しずらして重ね、三日月に欠けさせる */}
+      <View style={styles.moon}>
+        <View style={styles.moonDisc} />
+        <View style={styles.moonShadow} />
+      </View>
+      {STARS.map((st, i) => (
+        <View
+          key={i}
+          style={[
+            styles.star,
+            { top: st.top, left: st.left, right: st.right, width: st.size, height: st.size },
+          ]}
+        />
+      ))}
     </View>
   );
 }
@@ -107,8 +124,8 @@ function NotifyWarning({ onPress }: { onPress: () => void }) {
       style={({ pressed }) => [styles.warning, pressed && styles.pressed]}
       onPress={onPress}
     >
-      <Text style={styles.warningTitle}>通知オフ：アプリを開いている間だけ鳴ります</Text>
-      <Text style={styles.warningBody}>タップして通知を許可すると、閉じていても鳴ります</Text>
+      <Text style={styles.warningTitle}>通知がオフです</Text>
+      <Text style={styles.warningBody}>アプリを閉じていると鳴りません（タップで設定）</Text>
     </Pressable>
   );
 }
@@ -165,11 +182,11 @@ export default function App() {
       return;
     }
     Alert.alert(
-      '通知を許可すると',
-      'アプリを閉じていても、時刻になったら音とバナーでお知らせできます。許可しない場合も、アプリを開いている間はアラーム画面でお知らせします。',
+      '通知をオンにしますか？',
+      'オンにすると、アプリを閉じていても鳴ります。設定アプリから変えられます。',
       [
-        { text: 'このままでいい', style: 'cancel' },
-        { text: '設定を開く', onPress: () => void Linking.openSettings() },
+        { text: 'あとで', style: 'cancel' },
+        { text: '設定', onPress: () => void Linking.openSettings() },
       ]
     );
   }, [refreshPermission]);
@@ -254,10 +271,10 @@ export default function App() {
     setPhase('armed');
     if (!(await isSilentNoticeHidden())) {
       Alert.alert(
-        'マナーモードにご注意',
-        '端末がマナーモード（消音）だと、アラームの音が鳴らないことがあります。確実に音で起きたい場合は、寝る前にマナーモードを解除してください。',
+        'マナーモードだと音が鳴りません',
+        '音で起きたいときは、寝る前にマナーモードを切っておいてください。',
         [
-          { text: '今後表示しない', style: 'destructive', onPress: () => void hideSilentNotice() },
+          { text: '次回から非表示', style: 'destructive', onPress: () => void hideSilentNotice() },
           { text: 'OK', style: 'cancel' },
         ]
       );
@@ -296,11 +313,8 @@ export default function App() {
     return (
       <View style={[styles.screen, styles.ringingScreen]}>
         <StatusBar style="dark" />
-        <View style={styles.backdrop} pointerEvents="none">
-          <View style={styles.sunriseHill} />
-        </View>
         <SunMark />
-        <Text style={styles.ringingLabel}>起きる時間です</Text>
+        <Text style={styles.ringingLabel}>おはよう</Text>
         <Text style={styles.ringingTime}>
           {alarm ? formatTime(alarm.hour, alarm.minute) : ''}
         </Text>
@@ -308,7 +322,7 @@ export default function App() {
           style={({ pressed }) => [styles.stopButton, pressed && styles.pressed]}
           onPress={handleStop}
         >
-          <Text style={styles.stopButtonText}>止める</Text>
+          <Text style={styles.stopButtonText}>ストップ</Text>
         </Pressable>
       </View>
     );
@@ -320,9 +334,9 @@ export default function App() {
     const remainM = Math.ceil((remainMs % 3600000) / 60000);
     return (
       <View style={styles.screen}>
-        <Backdrop />
-        <StatusBar style="dark" />
-        {/* 読むだけの情報なので面で囲わず、クリームの上に直接置く */}
+        <NightSky />
+        <StatusBar style="light" />
+        {/* 読むだけの情報なので面で囲わず、夜空の上に直接置く */}
         <View style={styles.armedBlock}>
           <Text style={styles.armedLabel}>
             {alarm.repeatDaily ? '毎日' : '1回だけ'}
@@ -346,39 +360,34 @@ export default function App() {
 
   return (
     <View style={styles.screen}>
-      <Backdrop />
-      <StatusBar style="dark" />
-      <View style={styles.header}>
-        <Text style={styles.title}>目覚まし</Text>
-        <Text style={styles.subtitle}>何時に起こしましょうか</Text>
-      </View>
-      <View style={styles.card}>
-        <DateTimePicker
-          // ネイティブのピッカーは幅の既定値を持たず固有サイズに任せる作りなので、
-          // カードの内側に置くとはみ出す。カード幅いっぱいに広げて収める
-          style={styles.picker}
-          value={pickerValue}
-          mode="time"
-          display="spinner"
-          themeVariant="light"
-          textColor={colors.ink}
-          accentColor={colors.sageDeep}
-          onChange={(_, date) => {
-            if (date) setPickerValue(date);
-          }}
-        />
-        <View style={styles.divider} />
-        <View style={styles.repeatRow}>
-          <Text style={styles.repeatLabel}>毎日繰り返す</Text>
-          <Switch
-            value={repeatDaily}
-            onValueChange={setRepeatDaily}
-            trackColor={{ false: colors.switchOff, true: colors.sage }}
-            thumbColor={colors.card}
-            ios_backgroundColor={colors.switchOff}
-          />
+      <NightSky />
+      <StatusBar style="light" />
+      <DateTimePicker
+        // ネイティブのピッカーは幅の既定値を持たず固有サイズに任せる作りなので、
+        // 幅を決めて収める
+        style={styles.picker}
+        value={pickerValue}
+        mode="time"
+        display="spinner"
+        themeVariant="dark"
+        textColor={colors.starlight}
+        accentColor={colors.honey}
+        onChange={(_, date) => {
+          if (date) setPickerValue(date);
+        }}
+      />
+      {/* 既定は1回だけ。毎日にしたいときだけ触ればいいので、2択ではなくチェック1つにする */}
+      <Pressable
+        style={({ pressed }) => [styles.repeatRow, pressed && styles.pressed]}
+        onPress={() => setRepeatDaily((v) => !v)}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: repeatDaily }}
+      >
+        <View style={[styles.check, repeatDaily && styles.checkOn]}>
+          {repeatDaily && <Text style={styles.checkMark}>✓</Text>}
         </View>
-      </View>
+        <Text style={[styles.repeatText, repeatDaily && styles.repeatTextOn]}>毎日</Text>
+      </Pressable>
       {!notifyGranted && <NotifyWarning onPress={() => void enableNotification()} />}
       <Pressable
         style={({ pressed }) => [styles.setButton, pressed && styles.pressed]}
@@ -393,7 +402,7 @@ export default function App() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.cream,
+    backgroundColor: colors.night,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 28,
@@ -406,147 +415,123 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.98 }],
   },
 
-  // --- 背景装飾 ---
+  // --- 夜空 ---
   backdrop: {
     ...StyleSheet.absoluteFillObject,
   },
-  glowOuter: {
+  moon: {
     position: 'absolute',
-    top: -160,
-    right: -120,
-    width: 380,
-    height: 380,
-    borderRadius: 190,
-    backgroundColor: colors.creamDeep,
-    opacity: 0.55,
+    top: 72,
+    right: 44,
+    width: 64,
+    height: 64,
   },
-  glowInner: {
+  moonDisc: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.moon,
+  },
+  // 切り抜き（overflow: hidden）だと欠けた側に月の輪郭が細く残るので、上に重ねて隠す
+  moonShadow: {
     position: 'absolute',
-    top: -110,
-    right: -40,
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: colors.creamDeep,
+    top: -10,
+    left: -22,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.night,
+  },
+  star: {
+    position: 'absolute',
+    borderRadius: 2,
+    backgroundColor: colors.starlight,
     opacity: 0.6,
   },
-  hillBack: {
-    position: 'absolute',
-    left: -80,
-    right: -80,
-    bottom: -140,
-    height: 300,
-    borderRadius: 220,
-    backgroundColor: colors.sagePale,
-    opacity: 0.7,
-  },
-  hillFront: {
-    position: 'absolute',
-    left: -60,
-    right: -60,
-    bottom: -190,
-    height: 300,
-    borderRadius: 200,
-    backgroundColor: colors.sagePale,
-  },
 
-  // --- 見出し ---
-  header: {
-    alignItems: 'center',
-    gap: 6,
-  },
-  title: {
-    color: colors.ink,
-    fontSize: 30,
-    fontWeight: '600',
-    letterSpacing: 2,
-  },
-  subtitle: {
-    color: colors.inkSoft,
-    fontSize: 14,
-    letterSpacing: 1,
-  },
-
-  // --- カード ---
-  card: {
-    width: '100%',
-    maxWidth: 360,
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    paddingVertical: 20,
-    paddingHorizontal: 20,
-    gap: 8,
-    ...softShadow,
-  },
+  // --- セット画面 ---
   picker: {
     // 高さは指定しない（プラットフォームごとの固有の高さをそのまま使う）
-    alignSelf: 'stretch',
-    // カードの左右パディングぶんだけはみ出させ、狭い端末でもホイールを潰さない
-    // （375pt幅で 285pt → 309pt、390pt幅で 300pt → 324pt）
-    marginHorizontal: -12,
+    width: '100%',
+    maxWidth: 320,
   },
-  divider: {
-    alignSelf: 'stretch',
-    height: 1,
-    backgroundColor: colors.cardBorder,
-    marginTop: 4,
-  },
+  // 「毎日」のチェック。丸い枠を月明かりの色で描き、入れるとはちみつ色で満たす
   repeatRow: {
-    alignSelf: 'stretch',
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 6,
+    gap: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
   },
-  repeatLabel: {
-    color: colors.ink,
+  check: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: colors.dusk,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkOn: {
+    backgroundColor: colors.honey,
+    borderColor: colors.honey,
+  },
+  checkMark: {
+    color: colors.night,
+    fontSize: 14,
+    fontWeight: '800',
+    lineHeight: 16,
+  },
+  repeatText: {
+    color: colors.dusk,
     fontSize: 16,
+    letterSpacing: 1,
+  },
+  repeatTextOn: {
+    color: colors.starlight,
   },
 
   // --- 通知オフの警告 ---
-  // 画面の主役はあくまで時刻なので、赤ではなく地の色に馴染むテラコッタで面を張る
+  // 画面の主役はあくまで時刻なので、赤い面ではなく一段明るい夜空の面に収める
   warning: {
     width: '100%',
-    maxWidth: 360,
+    maxWidth: 320,
     alignItems: 'center',
     gap: 4,
-    backgroundColor: colors.clayPale,
-    borderRadius: radius.card,
+    backgroundColor: colors.nightRaised,
+    borderRadius: radius.panel,
     paddingVertical: 14,
     paddingHorizontal: 20,
     // gap の 28 は面と面の間隔としては空きすぎるので詰める
     marginVertical: -8,
   },
   warningTitle: {
-    color: colors.clayInk,
+    color: colors.honey,
     fontSize: 14,
     fontWeight: '600',
     textAlign: 'center',
   },
   warningBody: {
-    color: colors.clayInk,
+    color: colors.dusk,
     fontSize: 13,
-    opacity: 0.85,
   },
 
   // --- セットボタン ---
+  // 夜空の中で唯一の明るい面にして、押す場所を迷わせない
   setButton: {
-    backgroundColor: colors.sageDeep,
+    width: '100%',
+    maxWidth: 320,
+    alignItems: 'center',
+    backgroundColor: colors.honey,
     paddingVertical: 18,
-    paddingHorizontal: 72,
     borderRadius: radius.pill,
-    ...softShadow,
-    shadowColor: colors.sageDeep,
-    shadowOpacity: 0.3,
+    marginTop: 12,
   },
   setButtonText: {
-    color: colors.card,
-    fontSize: 20,
+    color: colors.night,
+    fontSize: 19,
     fontWeight: '700',
-    letterSpacing: 2,
+    letterSpacing: 4,
   },
 
   // --- セット済み画面 ---
@@ -554,10 +539,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  // 面を持たせるとカードを外した画面で浮くため、文字だけで示す。
-  // 字間を広めに取って、静かなまま存在感を出す
+  // 面を持たせず文字だけで示す。字間を広めに取って、静かなまま存在感を出す
   armedLabel: {
-    color: colors.sageInk,
+    color: colors.honey,
     fontSize: 13,
     fontWeight: '600',
     letterSpacing: 5,
@@ -565,15 +549,14 @@ const styles = StyleSheet.create({
     marginLeft: 5,
   },
   armedTime: {
-    color: colors.ink,
-    // 面から出したぶん、一目で読める大きさまで上げる
+    color: colors.starlight,
     fontSize: 92,
     fontWeight: '200',
     letterSpacing: 2,
     fontVariant: ['tabular-nums'],
   },
   countdown: {
-    color: colors.inkSoft,
+    color: colors.dusk,
     fontSize: 16,
     letterSpacing: 1,
   },
@@ -595,16 +578,6 @@ const styles = StyleSheet.create({
   // --- 鳴動画面 ---
   ringingScreen: {
     backgroundColor: colors.sunrise,
-  },
-  sunriseHill: {
-    position: 'absolute',
-    left: -60,
-    right: -60,
-    bottom: -190,
-    height: 300,
-    borderRadius: 200,
-    backgroundColor: colors.sunriseCore,
-    opacity: 0.22,
   },
   sunWrap: {
     width: 200,
@@ -648,7 +621,7 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   stopButton: {
-    backgroundColor: colors.card,
+    backgroundColor: colors.paper,
     paddingVertical: 20,
     paddingHorizontal: 72,
     borderRadius: radius.pill,

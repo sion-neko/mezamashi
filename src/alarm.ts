@@ -90,8 +90,8 @@ export async function scheduleBurst(fire: Date, hour: number, minute: number): P
   for (let i = 0; i < BURST_COUNT; i++) {
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: '⏰ 起きる時間です',
-        body: `${label} のアラーム — アプリを開いて止めてください`,
+        title: '⏰ アラーム',
+        body: label,
         sound: ALARM_SOUND,
         ...(Platform.OS === 'android' ? { channelId: ANDROID_CHANNEL_ID } : {}),
       },
